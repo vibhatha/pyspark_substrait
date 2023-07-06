@@ -70,6 +70,7 @@ def test_spark_substrait_basic(tmp_path):
     assert tb2.equals(table_2)
     
     merged_df = pd.concat([tb1.to_pandas(), tb2.to_pandas()], ignore_index=True)
+    select_df = merged_df["c1"]
     
     tb = ibis.table([("c1", "int64"), ("c2", "varchar")], "sample",)
     query = tb.select(["c1"])
@@ -187,7 +188,6 @@ def test_spark_substrait_basic(tmp_path):
             pass
         
         def visit_project(self, project_rel: ProjectRel):
-            print("Visit Project")
             from substrait.gen.proto.algebra_pb2 import Expression
             if project_rel.expressions:
                 expressions = project_rel.expressions
@@ -208,11 +208,11 @@ def test_spark_substrait_basic(tmp_path):
                                 raise NotImplemented("MapKey not implemented in Project expression")
                             if direct_reference.HasField("struct_field"):
                                 struct_field = direct_reference.struct_field
-                                print(self._base_schema)
+                                selection_fields = []
                                 if self._base_schema:
                                     col_names = self._base_schema.names
-                                    #print(struct_field.field, col_names)
-
+                                    selection_fields.append(col_names[struct_field.field])
+                                self._df = self._df.select(selection_fields)
                         # case: masked_reference
                         elif selection.HasField("masked_reference"):
                             return NotImplemented(f"MaskedExpression not supported in ProjectRel")
@@ -220,7 +220,6 @@ def test_spark_substrait_basic(tmp_path):
                             return ValueError("Unsupported FieldReference type")
         
         def visit_read(self, read_rel: ReadRel):
-            print("Visit Read")
             self._base_schema = read_rel.base_schema
             df = None
             local_files = read_rel.local_files
@@ -249,9 +248,6 @@ def test_spark_substrait_basic(tmp_path):
     spark_visitor = TestSubstraitToSpark(spark_session=spark)
     visit_and_update(new_editor.rel, spark_visitor)
     df = spark_visitor.dataframe
-    assert df.toPandas().equals(merged_df)
-    
-    #print(new_editor.plan)
-    
-    #df = df.select(["c1"])
-    #df.show()
+    out_pdf = df.toPandas()
+    out_pdf = out_pdf["c1"] # make sure we get a series since select_df is a series
+    assert out_pdf.equals(select_df)

@@ -147,9 +147,10 @@ def _(rel: ReadRel, visitor: SubstraitToSpark) -> RelType:
         
 @visit_and_update.register(ProjectRel)
 def _(rel: ProjectRel, visitor: SubstraitToSpark) -> RelType:
-    visitor.visit_project(rel)
     if rel.HasField("input"):
         visit_and_update(rel.input, visitor)
+    visitor.visit_project(rel)
+    
 
 
 
