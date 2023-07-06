@@ -1,0 +1,2 @@
+ibis >= 3.2.0
+ibis-substrait >= 2.28.1
